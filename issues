@@ -1,86 +1,49 @@
-name: Terraform Provisioning
-description: Use this form to request VM provisioning via Terraform.
-title: "Terraform Provisioning"
-labels:
-  - terraform
-body:
-  - type: markdown
-    attributes:
-      value: |
-        FORM:TERRAFORM
-  - type: textarea
-    id: config_blob
-    attributes:
-      label: Full Terraform Vars
-      description: |
-        Paste full .tfvars or JSON/YAML here. When provided, the workflow will use this content directly as `issue.auto.tfvars`.
-      value: |
-        # Edit any values below as needed and submit
-        vm_name               = "Rocker-8-PG"
-        display_name          = "Rocker-8-PG"
-        project               = "PC-DTT:NPRD"
-        zone                  = "us-west-1a"
+   - name: Extract tfvars from issue body
+        id: parse
+        run: |
+          echo "${{ github.event.issue.body }}" > issue.txt
+          # The form must include the 'Full Terraform Vars' textarea (config_blob).
+          # Read config_blob (JSON or markdown extraction) and fail if missing.
+          CONFIG_BLOB=""
+          if echo "$(cat issue.txt)" | jq -r . >/dev/null 2>&1; then
+            CONFIG_BLOB=$(jq -r '.config_blob // empty' issue.txt || true)
+            WS_ORG=$(jq -r '.workspace_organization // empty' issue.txt || true)
+            WS_HOST=$(jq -r '.workspace_hostname // empty' issue.txt || true)
+            WS_NAME=$(jq -r '.workspace_name // empty' issue.txt || true)
+            JFROG_TOKEN=$(jq -r '.jfrog_token // empty' issue.txt || true)
+          else
+            # Extract the textarea content from the issue form markdown (the Full Terraform Vars block)
+            CONFIG_BLOB=$(awk 'BEGIN{found=0} /^### Full Terraform Vars/{found=1; next} /^### /&&found{exit} found{print}' issue.txt | sed '/^\s*$/d' || true)
+            CONFIG_BLOB=$(echo "$CONFIG_BLOB" | sed '1s/^```//; $s/```$//' || true)
+            getval() { awk -v k="$1" 'f&&$0!~/^\s*$/&&$0!="_No response_"{print;exit} $0~"^### "k{f=1}' issue.txt; }
+            WS_ORG=$(getval "Statefile JFrog repo name" || true)
+            WS_HOST=$(getval "Statefile JFrog hostname" || true)
+            WS_NAME=$(getval "Statefile workspace name" || true)
+            JFROG_TOKEN=$(getval "JFrog Token" || true)
+          fi
 
-        # Network
-        vpc_id                = "fa751d7e-cb3b-44e7-83ae-62c9184a7237"
-        network_id            = "c10232af-bb51-44d3-af17-571c981f50cf"
+          # Require CONFIG_BLOB to be present; fail early with helpful message
+          if [ -z "$(printf '%s' "$CONFIG_BLOB" | sed -n '1p')" ]; then
+            echo "ERROR: 'Full Terraform Vars' (config_blob) is required in the issue form. Aborting." >&2
+            exit 1
+          fi
 
-        # Compute
-        cpu_number            = 8
-        memory                = 10240
-        root_disk_size        = 25
+          # Write the provided config_blob directly to issue.auto.tfvars
+          printf '%s' "$CONFIG_BLOB" > issue.auto.tfvars
+          echo "Wrote issue.auto.tfvars from config_blob content"
 
-        # Postgres
-        postgres_attuid       = "mr581d"
-        postgres_version      = "16.9"
-        pg_data_disk_name     = "Rockey-8-PG-data-disk"
-        pg_data_disk_size     = 50
-        pg_wal_disk_name      = "Rockey-8-PG-wal-disk"
-        pg_wal_disk_size      = 30
-        pg_temp_disk_name     = "Rockey-8-PG-xlog-disk"
-        pg_temp_disk_size     = 20
-        pg_log_disk_name      = "Rockey-8-PG-backup-disk"
-        pg_log_disk_size      = 40
+          # Export workspace and jfrog values to GITHUB_ENV (do NOT inject them into issue.auto.tfvars)
+          echo "WS_ORG=$WS_ORG" >> $GITHUB_ENV
+          echo "WS_HOST=$WS_HOST" >> $GITHUB_ENV
+          echo "WS_NAME=$WS_NAME" >> $GITHUB_ENV
+          echo "JFROG_TOKEN=$JFROG_TOKEN" >> $GITHUB_ENV
 
-        # CloudStack
-        cloudstack_url        = "https://flexcloud.ecp.att.com/client/api"
-        cloudstack_api_key    = ""
-        cloudstack_secret_key = ""
-        jfrog_token           = ""
-    validations:
-      required: false
-
-  - type: input
-    id: workspace_organization
-    attributes:
-      label: Statefile JFrog repo name
-      description: The repository name (organization) used for remote state in JFrog
-      placeholder: my-org-repo
-    validations:
-      required: true
-
-  - type: input
-    id: workspace_hostname
-    attributes:
-      label: Statefile JFrog hostname
-      description: Hostname of the JFrog instance used for Terraform state
-      value: artifact.it.att.com
-    validations:
-      required: true
-
-  - type: input
-    id: workspace_name
-    attributes:
-      label: Statefile workspace name
-      description: The workspace name used for the Terraform remote state
-      placeholder: my-workspace
-    validations:
-      required: true
-
-  - type: input
-    id: jfrog_token
-    attributes:
-      label: JFrog Token
-      description: Provide a JFrog token if you want the workflow to use it. Prefer repository secrets for sensitive values.
-    validations:
-      required: true
+      - name: Echo Terraform form values
+        run: |          
+          echo "=== Parsed tfvars for Terraform ==="
+          cat issue.auto.tfvars
+          # ensure a blank line so the following labels appear on their own lines
+          echo ""
+          echo "Workspace Organization: $WS_ORG"
+          echo "Workspace Hostname: $WS_HOST"
+          echo "Workspace Name: $WS_NAME"
