@@ -1,0 +1,86 @@
+name: Terraform Provisioning
+description: Use this form to request VM provisioning via Terraform.
+title: "Terraform Provisioning"
+labels:
+  - terraform
+body:
+  - type: markdown
+    attributes:
+      value: |
+        FORM:TERRAFORM
+  - type: textarea
+    id: config_blob
+    attributes:
+      label: Full Terraform Vars
+      description: |
+        Paste full .tfvars or JSON/YAML here. When provided, the workflow will use this content directly as `issue.auto.tfvars`.
+      value: |
+        # Edit any values below as needed and submit
+        vm_name               = "Rocker-8-PG"
+        display_name          = "Rocker-8-PG"
+        project               = "PC-DTT:NPRD"
+        zone                  = "us-west-1a"
+
+        # Network
+        vpc_id                = "fa751d7e-cb3b-44e7-83ae-62c9184a7237"
+        network_id            = "c10232af-bb51-44d3-af17-571c981f50cf"
+
+        # Compute
+        cpu_number            = 8
+        memory                = 10240
+        root_disk_size        = 25
+
+        # Postgres
+        postgres_attuid       = "mr581d"
+        postgres_version      = "16.9"
+        pg_data_disk_name     = "Rockey-8-PG-data-disk"
+        pg_data_disk_size     = 50
+        pg_wal_disk_name      = "Rockey-8-PG-wal-disk"
+        pg_wal_disk_size      = 30
+        pg_temp_disk_name     = "Rockey-8-PG-xlog-disk"
+        pg_temp_disk_size     = 20
+        pg_log_disk_name      = "Rockey-8-PG-backup-disk"
+        pg_log_disk_size      = 40
+
+        # CloudStack
+        cloudstack_url        = "https://flexcloud.ecp.att.com/client/api"
+        cloudstack_api_key    = ""
+        cloudstack_secret_key = ""
+        jfrog_token           = ""
+    validations:
+      required: false
+
+  - type: input
+    id: workspace_organization
+    attributes:
+      label: Statefile JFrog repo name
+      description: The repository name (organization) used for remote state in JFrog
+      placeholder: my-org-repo
+    validations:
+      required: true
+
+  - type: input
+    id: workspace_hostname
+    attributes:
+      label: Statefile JFrog hostname
+      description: Hostname of the JFrog instance used for Terraform state
+      value: artifact.it.att.com
+    validations:
+      required: true
+
+  - type: input
+    id: workspace_name
+    attributes:
+      label: Statefile workspace name
+      description: The workspace name used for the Terraform remote state
+      placeholder: my-workspace
+    validations:
+      required: true
+
+  - type: input
+    id: jfrog_token
+    attributes:
+      label: JFrog Token
+      description: Provide a JFrog token if you want the workflow to use it. Prefer repository secrets for sensitive values.
+    validations:
+      required: true
