@@ -1,4 +1,4 @@
-   - name: Extract tfvars from issue body
+- name: Extract tfvars from issue body
         id: parse
         run: |
           echo "${{ github.event.issue.body }}" > issue.txt
@@ -11,6 +11,7 @@
             WS_HOST=$(jq -r '.workspace_hostname // empty' issue.txt || true)
             WS_NAME=$(jq -r '.workspace_name // empty' issue.txt || true)
             JFROG_TOKEN=$(jq -r '.jfrog_token // empty' issue.txt || true)
+            OS_TYPE=$(jq -r '.os_type // empty' issue.txt || true)
           else
             # Extract the textarea content from the issue form markdown (the Full Terraform Vars block)
             CONFIG_BLOB=$(awk 'BEGIN{found=0} /^### Full Terraform Vars/{found=1; next} /^### /&&found{exit} found{print}' issue.txt | sed '/^\s*$/d' || true)
@@ -20,6 +21,7 @@
             WS_HOST=$(getval "Statefile JFrog hostname" || true)
             WS_NAME=$(getval "Statefile workspace name" || true)
             JFROG_TOKEN=$(getval "JFrog Token" || true)
+            OS_TYPE=$(getval "OS Type" || true)
           fi
 
           # Require CONFIG_BLOB to be present; fail early with helpful message
@@ -37,6 +39,7 @@
           echo "WS_HOST=$WS_HOST" >> $GITHUB_ENV
           echo "WS_NAME=$WS_NAME" >> $GITHUB_ENV
           echo "JFROG_TOKEN=$JFROG_TOKEN" >> $GITHUB_ENV
+          echo "OS_TYPE=$OS_TYPE" >> $GITHUB_ENV
 
       - name: Echo Terraform form values
         run: |          
@@ -47,3 +50,16 @@
           echo "Workspace Organization: $WS_ORG"
           echo "Workspace Hostname: $WS_HOST"
           echo "Workspace Name: $WS_NAME"
+          echo "OS Type: $OS_TYPE"
+          
+      - name: Create backend.hcl file
+        run: |
+          cat <<EOF > backend.hcl
+          hostname = "$WS_HOST"
+          organization = "$WS_ORG"
+          token = "$JFROG_TOKEN"
+          workspaces {
+              name = "${{ github.event.inputs.workspace_name }}"       
+          }
+          EOF
+        working-directory: Terraform
